@@ -1,6 +1,8 @@
 # OSPRO - Secure File Management System
 
-A secure file management system with user isolation and sandbox capabilities.
+A secure file management system with user isolation and sandbox capabilities(in development).
+
+NOTE - This is still a simulation and not integrated with any operating system and can be further refined and developed with respect to related factors.
 
 ## Features
 
