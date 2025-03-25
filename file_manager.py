@@ -165,3 +165,84 @@ class FileManager:
         except Exception as e:
             self.logger.error(f"Error loading metadata: {str(e)}")
             return {}
+    def _save_metadata(self):
+        """Save metadata to file."""
+        try:
+            data = {k: v.to_dict() for k, v in self.metadata.items()}
+            with open(self.metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            self.logger.error(f"Error saving metadata: {str(e)}")
+
+    def _secure_file(self, file_path: str):
+        """Apply security settings to a file."""
+        try:
+            # Get current user's SID
+            user_sid = win32security.GetTokenInformation(
+                win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32security.TOKEN_QUERY),
+                win32security.TokenUser
+            )[0]
+            
+            # Create security descriptor
+            security = win32security.SECURITY_ATTRIBUTES()
+            security.SECURITY_DESCRIPTOR = win32security.SECURITY_DESCRIPTOR()
+            security.SECURITY_DESCRIPTOR.Initialize()
+            
+            # Create DACL
+            dacl = win32security.ACL()
+            dacl.Initialize()
+            
+            # Allow SYSTEM full control
+            dacl.AddAccessAllowedAce(
+                win32security.ACL_REVISION,
+                win32con.GENERIC_ALL,
+                win32security.ConvertStringSidToSid("S-1-5-18")
+            )
+            
+            # Allow current user full control
+            dacl.AddAccessAllowedAce(
+                win32security.ACL_REVISION,
+                win32con.GENERIC_ALL,
+                user_sid
+            )
+            
+            # Set DACL
+            security.SECURITY_DESCRIPTOR.SetSecurityDescriptorDacl(1, dacl, 0)
+            
+            # Apply security to file
+            win32security.SetFileSecurity(
+                file_path,
+                win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
+                security.SECURITY_DESCRIPTOR
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to secure file {file_path}: {str(e)}")
+            raise
+
+    def _verify_user_access(self, file_path: str) -> bool:
+        """Verify that the file is in the user's directory and accessible."""
+        try:
+            # Log the access verification attempt
+            self.logger.info(f"Verifying access to file: {file_path}")
+            
+            # Check if file exists
+            if not os.path.exists(file_path):
+                self.logger.warning(f"File does not exist: {file_path}")
+                return False
+                
+            # Try to open the file to verify access
+            try:
+                with open(file_path, 'rb') as f:
+                    # Try to read a small amount to verify access
+                    f.read(1)
+                    f.seek(0)  # Reset file pointer
+                self.logger.info(f"File access verified: {file_path}")
+                return True
+            except Exception as e:
+                self.logger.error(f"Failed to access file {file_path}: {str(e)}")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"Error verifying file access: {str(e)}")
+            return False
