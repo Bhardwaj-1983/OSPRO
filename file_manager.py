@@ -346,3 +346,52 @@ class FileManager:
         except Exception as e:
             self.logger.error(f"Error getting file info: {str(e)}")
             return None
+
+    def list_files(self) -> List[Dict]:
+        """List all files in the current user's private directory."""
+        try:
+            if not self.current_user:
+                raise ValueError("No user set")
+                
+            files = []
+            self.logger.info(f"Listing files in directory: {self.user_dir}")
+            
+            # Check if directory exists
+            if not os.path.exists(self.user_dir):
+                self.logger.error(f"User directory does not exist: {self.user_dir}")
+                return files
+                
+            # List all files in the directory
+            for filename in os.listdir(self.user_dir):
+                if filename == "metadata.json":
+                    continue
+                    
+                file_path = os.path.join(self.user_dir, filename)
+                self.logger.debug(f"Checking file: {file_path}")
+                
+                # Verify file exists and is accessible
+                if os.path.isfile(file_path):
+                    try:
+                        # Get file info
+                        stat = os.stat(file_path)
+                        file_info = {
+                            'name': filename,
+                            'path': file_path,
+                            'size': stat.st_size,
+                            'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            'owner': self.current_user
+                        }
+                        
+                        files.append(file_info)
+                        self.logger.debug(f"Added file to list: {filename}")
+                    except Exception as e:
+                        self.logger.error(f"Error getting info for file {filename}: {str(e)}")
+                        continue
+            
+            self.logger.info(f"Found {len(files)} files in directory")
+            return files
+            
+        except Exception as e:
+            self.logger.error(f"Error listing files: {str(e)}")
+            return []
