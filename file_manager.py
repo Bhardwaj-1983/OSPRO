@@ -395,3 +395,127 @@ class FileManager:
         except Exception as e:
             self.logger.error(f"Error listing files: {str(e)}")
             return []
+
+    def _unhide_all_files(self):
+        """Remove hidden attribute from all files in the user directory."""
+        try:
+            if not os.path.exists(self.user_dir):
+                self.logger.error(f"User directory does not exist: {self.user_dir}")
+                return
+                
+            for root, dirs, files in os.walk(self.user_dir):
+                # Unhide directories
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    try:
+                        current_attrs = win32api.GetFileAttributes(dir_path)
+                        if current_attrs & win32con.FILE_ATTRIBUTE_HIDDEN:
+                            win32api.SetFileAttributes(
+                                dir_path,
+                                current_attrs & ~win32con.FILE_ATTRIBUTE_HIDDEN
+                            )
+                            self.logger.info(f"Unhidden directory: {dir_path}")
+                    except Exception as e:
+                        self.logger.error(f"Failed to unhide directory {dir_path}: {str(e)}")
+                
+                # Unhide files
+                for file_name in files:
+                    file_path = os.path.join(root, file_name)
+                    try:
+                        current_attrs = win32api.GetFileAttributes(file_path)
+                        if current_attrs & win32con.FILE_ATTRIBUTE_HIDDEN:
+                            win32api.SetFileAttributes(
+                                file_path,
+                                current_attrs & ~win32con.FILE_ATTRIBUTE_HIDDEN
+                            )
+                            self.logger.info(f"Unhidden file: {file_path}")
+                    except Exception as e:
+                        self.logger.error(f"Failed to unhide file {file_path}: {str(e)}")
+            
+            self.logger.info("Completed unhiding all files")
+        except Exception as e:
+            self.logger.error(f"Failed to unhide files: {str(e)}")
+
+    def get_file_metadata(self, filename: str) -> Optional[FileMetadata]:
+        """Get metadata for a specific file."""
+        return self.metadata.get(filename)
+
+    def _is_path_within_root(self, file_path: str) -> bool:
+        """Check if a file path is within the root directory."""
+        try:
+            # Convert paths to absolute paths for comparison
+            abs_file_path = os.path.abspath(file_path)
+            abs_root_path = os.path.abspath(self.root_dir)
+            
+            # Check if the file path starts with the root path
+            return abs_file_path.startswith(abs_root_path)
+        except Exception as e:
+            self.logger.error(f"Error checking path: {str(e)}")
+            return False
+
+    def verify_file_ownership(self, file_path: str, username: str) -> bool:
+        """Verify that a file belongs to the specified user."""
+        try:
+            # Check if file exists
+            if not os.path.exists(file_path):
+                self.logger.error(f"File does not exist: {file_path}")
+                return False
+                
+            # Get file metadata
+            file_info = self.get_file_info(file_path)
+            if not file_info:
+                self.logger.error(f"Could not get file info for: {file_path}")
+                return False
+                
+            # Check if file is in user's directory
+            user_dir = os.path.join(self.root_dir, username)
+            if not file_path.startswith(user_dir):
+                self.logger.error(f"File is not in user's directory: {file_path}")
+                return False
+                
+            # Check file ownership in metadata
+            if file_info.get('owner') != username:
+                self.logger.error(f"File ownership mismatch: {file_path}")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error verifying file ownership: {str(e)}")
+            return False
+
+    def download_file(self, source_path: str, dest_path: str) -> bool:
+        """Download a file from the user's private directory to the specified destination."""
+        try:
+            if not self.current_user:
+                raise ValueError("No user set")
+                
+            # Log the download attempt
+            self.logger.info(f"Attempting to download file: {source_path}")
+            
+            # Verify source file exists and is accessible
+            if not os.path.exists(source_path):
+                self.logger.error(f"Source file does not exist: {source_path}")
+                return False
+                
+            if not os.access(source_path, os.R_OK):
+                self.logger.error(f"Source file is not readable: {source_path}")
+                return False
+                
+            # Verify file is in user's directory
+            if not source_path.startswith(self.user_dir):
+                self.logger.error(f"Access denied: File is not in user's directory")
+                return False
+            
+            # Copy file to destination
+            try:
+                shutil.copy2(source_path, dest_path)
+                self.logger.info(f"File downloaded successfully to: {dest_path}")
+                return True
+            except Exception as e:
+                self.logger.error(f"Failed to copy file: {str(e)}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error downloading file: {str(e)}")
+            return False 
